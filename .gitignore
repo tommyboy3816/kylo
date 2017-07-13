@@ -1,0 +1,11 @@
+.cproject
+.project
+*.cmd
+*.o
+*.ko
+*.order
+*.symvers
+*.swp
+.settings/
+.tmp_versions/
+*.mod.c

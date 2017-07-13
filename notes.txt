@@ -1,0 +1,7 @@
+./home/ralph/Downloads/eclipse/eclipse &
+tail -f syslog
+sudo bash -c 'echo "handsolo" > /proc/kylo'
+cat /proc/kylo
+
+sudo insmod ./kylo.ko 
+sudo rmmod kylo 
