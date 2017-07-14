@@ -5,3 +5,8 @@ cat /proc/kylo
 
 sudo insmod ./kylo.ko 
 sudo rmmod kylo 
+
+sudo service vncserver start
+
+/usr/src/linux-lts-xenial-4.4.0/drivers/net/loopback.c
+
