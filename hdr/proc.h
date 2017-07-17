@@ -10,8 +10,11 @@
 
 #include <linux/netdevice.h> /* struct device, and other headers */
 
+
+extern char g_ver[];
+
 #define PROCFS_MAX_SIZE     1024
-#define PROCFS_NAME         "kylo"
+//#define PROCFS_NAME         "kylo1"
 #define MSGSIZE             250
 #define MAX_SNULLS          2
 
@@ -23,7 +26,14 @@
 /* Default timeout period */
 #define SNULL_TIMEOUT 5   /* In jiffies */
 
+#define  SNULL_DYNAMIC  1
+#ifdef SNULL_DYNAMIC
+extern struct net_device **snull_devs;
+extern u_int32_t g_snull_idx;
+#else
 extern struct net_device *snull_devs[];
+#endif
+
 /*
  * Macros to help debugging
  */
@@ -78,6 +88,7 @@ struct snull_packet {
 static void snull_tx_timeout(struct net_device *dev);
 static void (*snull_interrupt)(int, void *, struct pt_regs *);
 
+void snull_cleanup(void);
 int kylo_create_proc_entry( void );
 int kylo_remove_proc_entry( void );
 
