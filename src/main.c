@@ -10,12 +10,20 @@
 #include <linux/init.h>
 #include "proc.h"
 
+
+char g_ver[128];
+
+#ifdef KYLOVER
+	int x = KYLOVER;
+#else
+	int x = 2;
+#endif
 static int __init kylo_init( void )
 {
 	int retval = 0;
 
-
-	printk(KERN_INFO "Kylo Init\n");
+	snprintf(g_ver, 128, "kylo%d", x);
+	printk(KERN_INFO "Kylo Init %d {%s}\n", x, g_ver);
 
 	/** Setup proc file */
 	kylo_create_proc_entry();
@@ -26,7 +34,10 @@ static int __init kylo_init( void )
 
 static void __exit kylo_exit( void )
 {
-	printk(KERN_INFO "Kylo Exit\n");
+	printk(KERN_INFO "Kylo Exit %d\n", x);
+
+	snull_cleanup();
+
 	kylo_remove_proc_entry();
 }
 

@@ -46,13 +46,17 @@
 static struct proc_dir_entry *proc_file_entry;
 static char *g_msg = NULL;
 static int g_temp = 0, g_len = 0, g_len_check = 1;
-
+static bool g_snull_activated = false;
 
 /*
  * The devices
  */
+#if SNULL_DYNAMIC
+struct net_device **snull_devs;
+u_int32_t g_snull_idx = 0;
+#else
 struct net_device *snull_devs[2];
-
+#endif
 
 /*
  * Transmitter lockup simulation, normally disabled.
@@ -75,14 +79,14 @@ module_param(pool_size, int, 0);
 
 int kylo_open_proc_callback(struct inode * sp_inode, struct file *sp_file)
 {
-	printk(KERN_INFO "/proc/%s called open\n", PROCFS_NAME);
+	printk(KERN_INFO "/proc/%s called open\n", g_ver);
 	return 0;
 }
 
 
 int kylo_release_proc_callback(struct inode *sp_indoe, struct file *sp_file)
 {
-	printk(KERN_INFO "/proc/%s called release\n", PROCFS_NAME);
+	printk(KERN_INFO "/proc/%s called release\n", g_ver);
 	return 0;
 }
 
@@ -723,31 +727,67 @@ void snull_init(struct net_device *dev)
  */
 void snull_cleanup(void)
 {
-	int i;
+	u_int32_t ii;
 
-	for (i = 0; i < 2;  i++) {
-		if (snull_devs[i]) {
-			unregister_netdev(snull_devs[i]);
-			snull_teardown_pool(snull_devs[i]);
-			free_netdev(snull_devs[i]);
+	if( !g_snull_activated ) {
+		printk(KERN_INFO "%s: snull not actived, nothing to do\n", __FUNCTION__);
+		return;
+	}
+
+	for( ii = 0; ii < 2; ii++ )
+	{
+		if( snull_devs[ii] )
+		{
+			unregister_netdev(snull_devs[ii]);
+			snull_teardown_pool(snull_devs[ii]);
+			free_netdev(snull_devs[ii]);
 		}
 	}
-	return;
+
+	kfree( snull_devs[ii] );
+
+	g_snull_activated = false;
 }
 
 
 static int kylo_create_eth_interface( void )
 {
 	int retval = -ENOMEM, result;
-	int size = (int)sizeof(struct snull_priv);
+	int size;
 	int ii = 0;
 
+
+	if( g_snull_activated ) {
+		printk(KERN_WARNING "%s: interfaces already created\n", __FUNCTION__);
+		kylo_discover_eth_interfaces();
+		return -ENODEV;
+	}
+
+	g_snull_activated = true;
 
 	snull_interrupt = use_napi ? snull_napi_interrupt : snull_regular_interrupt;
 
 	/** alloc memory for new device */
+	size = sizeof(struct net_device) * MAX_SNULLS;
+	snull_devs = kmalloc( size, GFP_KERNEL);
+	if( NULL == snull_devs ) {
+		printk(KERN_WARNING "FAILED to allocate %d  bytes\n", size);
+		return(retval);
+	}
 
 	/* Allocate the devices */
+#if SNULL_DYNAMIC
+	for( ii = 0; ii < MAX_SNULLS; ii++ )
+	{
+		snull_devs[ii] = alloc_netdev( sizeof(struct snull_priv), "sn%d", NET_NAME_UNKNOWN, snull_init );
+		printk(KERN_INFO "%3d) alloc_netdev: %d bytes, %s\n",
+			ii, sizeof(struct snull_priv), snull_devs[ii]->name);
+
+	}
+
+	retval = 0;
+
+#else
 	snull_devs[0] = alloc_netdev( sizeof(struct snull_priv), "sn%d", NET_NAME_UNKNOWN, snull_init );
 	snull_devs[1] = alloc_netdev( sizeof(struct snull_priv), "sn%d", NET_NAME_UNKNOWN, snull_init );
 
@@ -755,18 +795,22 @@ static int kylo_create_eth_interface( void )
 	if (snull_devs[0] == NULL || snull_devs[1] == NULL) {
 		goto out;
 	}
+#endif
 
+#if 1
 	retval = -ENODEV;
-	for( ii = 0; ii < 2;  ii++)
+	for( ii = 0; ii < MAX_SNULLS;  ii++)
 		if ((result = register_netdev(snull_devs[ii])))
 			printk(KERN_INFO "snull: error %i registering device \"%s\"\n",
 					result, snull_devs[ii]->name);
 		else {
 			retval = 0;
 		}
+#endif
 
 out:
 	if( retval ) {
+		printk(KERN_WARNING "Some error occured...cleanup and quit\n");
 		snull_cleanup();
 	}
 
@@ -847,7 +891,7 @@ int kylo_create_proc_entry()
 	g_len = 0; g_temp = 0;
 	g_msg = NULL;
 
-	proc_file_entry = proc_create(PROCFS_NAME, 0666, NULL, &proc_fops);
+	proc_file_entry = proc_create(g_ver, 0666, NULL, &proc_fops);
 	if(proc_file_entry == NULL) {
 		return -ENOMEM;
 	}
@@ -864,13 +908,11 @@ int kylo_create_proc_entry()
 
 int kylo_remove_proc_entry()
 {
-	remove_proc_entry( PROCFS_NAME, NULL );
+	remove_proc_entry( g_ver, NULL );
 
 	if( g_msg == NULL ) {
 	    return -ENOMEM;
 	}
-
-	snull_cleanup();
 
 	kfree(g_msg);
 

@@ -1,6 +1,6 @@
 ./home/ralph/Downloads/eclipse/eclipse &
 tail -f syslog
-sudo bash -c 'echo "handsolo" > /proc/kylo'
+sudo bash -c 'echo "1" > /proc/kylo2'
 cat /proc/kylo
 
 sudo insmod ./kylo.ko 
