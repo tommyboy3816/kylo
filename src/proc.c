@@ -734,7 +734,7 @@ void snull_cleanup(void)
 		return;
 	}
 
-	for( ii = 0; ii < 2; ii++ )
+	for( ii = 0; ii < MAX_SNULLS; ii++ )
 	{
 		if( snull_devs[ii] )
 		{

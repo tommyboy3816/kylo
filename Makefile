@@ -1,4 +1,5 @@
-VERSION := 3
+VERSION     :=  1
+MAX_SNULLS  :=  3
 
 obj-m  := kylo$(VERSION).o
 
@@ -8,7 +9,7 @@ kylo$(VERSION)-y := \
         src/work.o
 
 EXTRA_CFLAGS = -I$(PWD)/hdr 
-CFLAGS_MODULE=-DKYLOVER=$(VERSION)
+CFLAGS_MODULE=-DKYLOVER=$(VERSION) -DMAX_DEVS=$(MAX_SNULLS)
 #KCPPFLAGS="-DDATE=\\\"\"$(shell date)\"\\\""
 #KCPPFLAGS="-DDATE=$(shell date) -DPROCFS_NAME=kylo2"
 

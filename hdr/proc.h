@@ -12,11 +12,12 @@
 
 
 extern char g_ver[];
+extern u_int32_t MAX_SNULLS;
+
 
 #define PROCFS_MAX_SIZE     1024
 //#define PROCFS_NAME         "kylo1"
 #define MSGSIZE             250
-#define MAX_SNULLS          2
 
 
 /* These are the flags in the statusword */

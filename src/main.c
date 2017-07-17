@@ -14,16 +14,24 @@
 char g_ver[128];
 
 #ifdef KYLOVER
-	int x = KYLOVER;
+	u_int32_t VERSION = KYLOVER;
 #else
-	int x = 2;
+	u_int32_t VERSION = 1;
 #endif
+
+#ifdef MAX_DEVS
+	u_int32_t MAX_SNULLS = MAX_DEVS;
+#else
+	u_int32_t MAX_SNULLS = 2;
+#endif
+
+
 static int __init kylo_init( void )
 {
 	int retval = 0;
 
-	snprintf(g_ver, 128, "kylo%d", x);
-	printk(KERN_INFO "Kylo Init %d {%s}\n", x, g_ver);
+	snprintf(g_ver, 128, "kylo%d", VERSION);
+	printk(KERN_INFO "Kylo Init %d {%s}\n", VERSION, g_ver);
 
 	/** Setup proc file */
 	kylo_create_proc_entry();
@@ -34,7 +42,7 @@ static int __init kylo_init( void )
 
 static void __exit kylo_exit( void )
 {
-	printk(KERN_INFO "Kylo Exit %d\n", x);
+	printk(KERN_INFO "Kylo Exit\n");
 
 	snull_cleanup();
 
