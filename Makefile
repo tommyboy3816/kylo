@@ -1,5 +1,5 @@
 VERSION     :=  1
-MAX_SNULLS  :=  3
+MAX_SNULLS  :=  2
 
 obj-m  := kylo$(VERSION).o
 
@@ -23,6 +23,8 @@ all:
 	@echo "sudo bash -c 'echo \"1\" > /proc/kylo$(VERSION)'"
 	@echo "sudo bash -c 'echo \"2\" > /proc/kylo$(VERSION)'"
 	@echo "sudo bash -c 'echo "test string" > /proc/kylo$(VERSION)'"
+	@echo "sudo ifconfig sn0 local0; sudo ifconfig sn1 local1"
+	@echo "ping -c 2 -s 1900 remote0"
 	@echo "sudo rmmod kylo$(VERSION)"
 
 clean:

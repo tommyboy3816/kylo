@@ -236,8 +236,18 @@ static void snull_rx_ints(struct net_device *dev, int enable)
  */
 
 
+/**
+ * @fn int snull_open(struct net_device *dev)
+ * @brief Get the driver initialized
+ *
+ * Called when ifconfig is run, open system resources and turn on hardware
+ */
 int snull_open(struct net_device *dev)
 {
+	int ii = 0;
+
+
+	printk(KERN_INFO "%s: dev %s\n", __FUNCTION__, dev->name);
 	/* request_region(), request_irq(), ....  (like fops->open) */
 
 	/*
@@ -246,18 +256,35 @@ int snull_open(struct net_device *dev)
 	 * address (the first byte of multicast addrs is odd).
 	 */
 	memcpy(dev->dev_addr, "\0SNUL0", ETH_ALEN);
+#if 1
+	for( ii = 1; ii < MAX_SNULLS; ii++ )
+	{
+		if (dev == snull_devs[ii]) {
+			dev->dev_addr[ETH_ALEN-1]++; /* \0SNULii */
+		}
+	}
+#else
 	if (dev == snull_devs[1])
 		dev->dev_addr[ETH_ALEN-1]++; /* \0SNUL1 */
+#endif
 	netif_start_queue(dev);
 	return 0;
 }
 
 
+/**
+ * @fn int snull_release(struct net_device *dev)
+ * @brief Perform reverse steps of \a snull_open
+ * @param dev
+ * @return
+ */
 int snull_release(struct net_device *dev)
 {
-    /* release ports, irq and such -- like fops->close */
+	printk(KERN_INFO "%s: dev %s\n", __FUNCTION__, dev->name);
 
+	/* release ports, irq and such -- like fops->close */
 	netif_stop_queue(dev); /* can't transmit any more */
+
 	return 0;
 }
 
@@ -267,6 +294,8 @@ int snull_release(struct net_device *dev)
  */
 int snull_config(struct net_device *dev, struct ifmap *map)
 {
+	printk(KERN_INFO "%s: %s\n", __FUNCTION__, dev->name);
+
 	if (dev->flags & IFF_UP) /* can't act on a running interface */
 		return -EBUSY;
 
@@ -315,6 +344,9 @@ void snull_rx(struct net_device *dev, struct snull_packet *pkt)
 	skb->ip_summed = CHECKSUM_UNNECESSARY; /* don't check it */
 	priv->stats.rx_packets++;
 	priv->stats.rx_bytes += pkt->datalen;
+	printk(KERN_INFO "%s: %s: %d octets, proto 0x%04x, room: head %d, tail %d\n",
+		__FUNCTION__, dev->name, skb->len, htons(skb->protocol),
+		skb_headroom(skb), skb_tailroom(skb));
 	netif_rx(skb);
   out:
 	return;
@@ -393,7 +425,12 @@ static void snull_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	/* retrieve statusword: real netdevices use I/O instructions */
 	statusword = priv->status;
 	priv->status = 0;
+
 	if (statusword & SNULL_RX_INTR) {
+
+		printk(KERN_INFO "%s: RX: dev %s: irq %d, octets %d\n",
+			__FUNCTION__, dev->name, irq, priv->tx_packetlen);
+
 		/* send it to snull_rx for handling */
 		pkt = priv->rx_queue;
 		if (pkt) {
@@ -401,7 +438,13 @@ static void snull_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			snull_rx(dev, pkt);
 		}
 	}
+
+	/** Handle Tx Completed Interrupt */
 	if (statusword & SNULL_TX_INTR) {
+
+		printk(KERN_INFO "%s: TX: dev %s: irq %d, octets %d\n",
+			__FUNCTION__, dev->name, irq, priv->tx_packetlen);
+
 		/* a transmission is over: free the skb */
 		priv->stats.tx_packets++;
 		priv->stats.tx_bytes += priv->tx_packetlen;
@@ -475,6 +518,8 @@ static void snull_hw_tx(char *buf, int len, struct net_device *dev)
 	u_int32_t *saddr, *daddr;
 	struct snull_packet *tx_buffer;
 
+	printk(KERN_INFO "%s: %s: %d octets\n", __FUNCTION__, dev->name, len);
+
 	/* I am paranoid. Ain't I? */
 	if (len < sizeof(struct ethhdr) + sizeof(struct iphdr)) {
 		printk("snull: Hmm... packet too short (%i octets)\n",
@@ -543,8 +588,12 @@ static void snull_hw_tx(char *buf, int len, struct net_device *dev)
 }
 
 
-/*
- * Transmit a packet (called by the kernel)
+/**
+ * @fn int snull_tx(struct sk_buff *skb, struct net_device *dev)
+ * @brief Transmit a packet (called by the kernel)
+ * @param skb
+ * @param dev
+ * @return
  */
 int snull_tx(struct sk_buff *skb, struct net_device *dev)
 {
@@ -552,6 +601,8 @@ int snull_tx(struct sk_buff *skb, struct net_device *dev)
 	char *data, shortpkt[ETH_ZLEN];
 	struct snull_priv *priv = netdev_priv(dev);
 
+
+	printk(KERN_INFO "%s: %s: %d octets\n", __FUNCTION__, dev->name, skb->len);
 	data = skb->data;
 	len = skb->len;
 	if (len < ETH_ZLEN) {
@@ -650,8 +701,12 @@ int snull_change_mtu(struct net_device *dev, int new_mtu)
 	struct snull_priv *priv = netdev_priv(dev);
 	spinlock_t *lock = &priv->lock;
 
+
+	printk(KERN_INFO "%s: dev %s: changing MTU from %d to %d\n",
+		__FUNCTION__, dev->name, dev->mtu, new_mtu);
+
 	/* check ranges */
-	if ((new_mtu < 68) || (new_mtu > 1500))
+	if ((new_mtu < 68) || (new_mtu > 3500))  // ifconfig sn0 mtu 2000 largest tested
 		return -EINVAL;
 	/*
 	 * Do anything you need, and the accept the value
@@ -679,6 +734,13 @@ static const struct net_device_ops snull_netdev_ops = {
 	.ndo_tx_timeout      = snull_tx_timeout
 };
 
+
+void snull_ethtool( void )
+{
+	printk(KERN_INFO "%s: ethtool support\n", __FUNCTION__);
+}
+
+
 /*
  * The init function (sometimes called probe).
  * It is invoked by register_netdev()
@@ -686,15 +748,15 @@ static const struct net_device_ops snull_netdev_ops = {
 void snull_init(struct net_device *dev)
 {
 	struct snull_priv *priv;
-#if 0
-    	/*
+
+	/*
 	 * Make the usual checks: check_region(), probe irq, ...  -ENODEV
 	 * should be returned if no device found.  No resource should be
 	 * grabbed: this is done on open().
 	 */
-#endif
+	printk(KERN_INFO "%s: dev %s\n", __FUNCTION__, dev->name);
 
-    	/*
+	/*
 	 * Then, assign other fields in dev, using ether_setup() and some
 	 * hand assignments
 	 */
@@ -705,15 +767,17 @@ void snull_init(struct net_device *dev)
 	/* keep the default flags, just add NOARP */
 	dev->flags           |= IFF_NOARP;
 	dev->features        |= NETIF_F_HW_CSUM;
+	dev->ethtool_ops    = &snull_ethtool;
+
 
 	/*
 	 * Then, initialize the priv field. This encloses the statistics
 	 * and a few private fields.
 	 */
 	priv = netdev_priv(dev);
-	//if (use_napi) {
-	//	netif_napi_add(dev, &priv->napi, snull_poll,2);
-	//}
+	if( use_napi ) {
+		netif_napi_add(dev, &priv->napi, snull_poll,2);
+	}
 
 	memset(priv, 0, sizeof(struct snull_priv));
 	spin_lock_init(&priv->lock);
@@ -780,6 +844,7 @@ static int kylo_create_eth_interface( void )
 	for( ii = 0; ii < MAX_SNULLS; ii++ )
 	{
 		snull_devs[ii] = alloc_netdev( sizeof(struct snull_priv), "sn%d", NET_NAME_UNKNOWN, snull_init );
+		/* TODO: need to check for memory allocation failure */
 		printk(KERN_INFO "%3d) alloc_netdev: %d bytes, %s\n",
 			ii, sizeof(struct snull_priv), snull_devs[ii]->name);
 
@@ -799,10 +864,13 @@ static int kylo_create_eth_interface( void )
 
 #if 1
 	retval = -ENODEV;
+	/**
+	 * Registering the netdev should be the very last initialization step
+	 */
 	for( ii = 0; ii < MAX_SNULLS;  ii++)
-		if ((result = register_netdev(snull_devs[ii])))
+		if( (result = register_netdev(snull_devs[ii])) )
 			printk(KERN_INFO "snull: error %i registering device \"%s\"\n",
-					result, snull_devs[ii]->name);
+				result, snull_devs[ii]->name);
 		else {
 			retval = 0;
 		}
@@ -860,6 +928,15 @@ static int kylo_write_proc_callback(struct file *sp_file, const char __user *buf
 }
 
 
+/**
+ * @fn
+ * @brief
+ * @param sp_file
+ * @param buf
+ * @param count
+ * @param offset
+ * @return
+ */
 int kylo_read_proc_callback( struct file *sp_file, char __user *buf, size_t count, loff_t *offset )
 {
 	if(g_len_check) {
@@ -886,7 +963,12 @@ static const struct file_operations proc_fops = {
 };
 
 
-int kylo_create_proc_entry()
+/**
+ * @fn
+ * @brief
+ * @return
+ */
+int kylo_create_proc_entry(void)
 {
 	g_len = 0; g_temp = 0;
 	g_msg = NULL;
@@ -906,7 +988,12 @@ int kylo_create_proc_entry()
 }
 
 
-int kylo_remove_proc_entry()
+/**
+ * @fn
+ * @brief
+ * @return
+ */
+int kylo_remove_proc_entry(void)
 {
 	remove_proc_entry( g_ver, NULL );
 
